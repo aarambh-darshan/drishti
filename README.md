@@ -6,6 +6,8 @@
     <a href="https://pypi.org/project/drishti-ai/"><img src="https://img.shields.io/pypi/v/drishti-ai?color=blue" alt="PyPI"></a>
     <a href="https://pypi.org/project/drishti-ai/"><img src="https://img.shields.io/pypi/pyversions/drishti-ai" alt="Python"></a>
     <a href="https://github.com/aarambh-darshan/drishti/blob/main/LICENSE"><img src="https://img.shields.io/github/license/aarambh-darshan/drishti" alt="License"></a>
+    <a href="https://buymeacoffee.com/aarambhdevhub"><img src="https://img.shields.io/badge/Support-Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000000" alt="Buy Me a Coffee"></a>
+    <a href="https://github.com/sponsors/aarambh-darshan"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white" alt="GitHub Sponsors"></a>
   </p>
 </p>
 
@@ -360,6 +362,15 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete system design, including
 ## 🤝 Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## ❤️ Support
+
+If Drishti helps your work and you want to support ongoing development:
+
+- [Buy Me a Coffee](https://buymeacoffee.com/aarambhdevhub)
+- [GitHub Sponsors](https://github.com/sponsors/aarambh-darshan)
 
 ---
 
