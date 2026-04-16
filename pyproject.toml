@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "drishti"
+version = "0.1.0"
+description = "See what your agent thinks — AI agent execution tracer"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Darshan" },
+]
+keywords = ["ai", "llm", "tracing", "observability", "agent", "openai", "anthropic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "rich>=13.0",
+    "typer>=0.9",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.20"]
+groq = ["groq>=0.4"]
+ollama = ["ollama>=0.1"]
+all = [
+    "openai>=1.0",
+    "anthropic>=0.20",
+    "groq>=0.4",
+    "ollama>=0.1",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+drishti = "drishti.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/aarambh-darshan/drishti"
+Repository = "https://github.com/aarambh-darshan/drishti"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

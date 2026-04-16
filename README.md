@@ -1,0 +1,347 @@
+<p align="center">
+  <h1 align="center">🔍 Drishti (दृष्टि)</h1>
+  <p align="center"><strong>See what your agent thinks.</strong></p>
+  <p align="center">
+    <a href="https://github.com/aarambh-darshan/drishti/actions"><img src="https://github.com/aarambh-darshan/drishti/workflows/CI/badge.svg" alt="CI"></a>
+    <a href="https://pypi.org/project/drishti/"><img src="https://img.shields.io/pypi/v/drishti?color=blue" alt="PyPI"></a>
+    <a href="https://pypi.org/project/drishti/"><img src="https://img.shields.io/pypi/pyversions/drishti" alt="Python"></a>
+    <a href="https://github.com/aarambh-darshan/drishti/blob/main/LICENSE"><img src="https://img.shields.io/github/license/aarambh-darshan/drishti" alt="License"></a>
+  </p>
+</p>
+
+---
+
+**Drishti** automatically captures, visualizes, and exports traces of AI agent execution. Add one decorator — see every LLM call with tokens, cost, and latency. Zero code changes to your agent logic.
+
+```python
+from drishti import trace
+
+@trace(name="my-agent")
+def run_agent(query):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": query}],
+    )
+    return response.choices[0].message.content
+```
+
+```
+🔍 Drishti Trace — my-agent
+├── ✅ [1] openai/gpt-4o-mini   312 tokens  $0.0001  124ms
+└── ✅ [2] openai/gpt-4o        891 tokens  $0.0089  387ms
+
+╭──────────── Summary ────────────╮
+│ Total Tokens  1203              │
+│ Total Cost    $0.0090 USD       │
+│ Wall Time     511ms             │
+│ LLM Calls     2                 │
+│ Status        SUCCESS           │
+╰─────────────────────────────────╯
+```
+
+---
+
+## ✨ Features
+
+- **🔌 Zero-config auto-detection** — OpenAI, Anthropic, Groq, Ollama intercepted automatically
+- **🌳 Rich terminal tree** — every LLM call with tokens, cost, and latency at a glance
+- **💾 JSON export** — full traces saved to `.drishti/traces/` for sharing, diffing, and replaying
+- **🖥️ CLI tool** — `drishti list`, `drishti view`, `drishti clear`
+- **💰 Cost tracking** — real-time pricing for 15+ models across 4 providers
+- **🛡️ Budget guard** — warn when cost exceeds a threshold
+- **⚡ Async support** — works with `async def` functions out of the box
+- **🔒 Thread-safe** — correct isolation for concurrent agents via thread-local + ContextVar
+- **🪶 Zero overhead** — pure passthrough when no `@trace` context is active
+
+---
+
+## 🚀 Quickstart
+
+### Install
+
+```bash
+pip install drishti[openai]        # OpenAI support
+# or
+pip install drishti[anthropic]     # Anthropic support
+# or
+pip install drishti[all]           # All providers
+```
+
+### Trace Your Agent
+
+```python
+from drishti import trace
+import openai
+
+client = openai.OpenAI()
+
+@trace(name="research-agent")
+def research_agent(query: str) -> str:
+    # Step 1: Generate search queries
+    plan = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Generate 3 search queries for the topic."},
+            {"role": "user", "content": query},
+        ],
+    )
+    queries = plan.choices[0].message.content
+
+    # Step 2: Synthesize answer with a stronger model
+    answer = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "Synthesize a comprehensive answer."},
+            {"role": "user", "content": f"Topic: {query}\nQueries: {queries}"},
+        ],
+    )
+    return answer.choices[0].message.content
+
+result = research_agent("What is quantum computing?")
+```
+
+That's it. Drishti automatically:
+1. **Intercepts** both LLM calls
+2. **Captures** tokens, cost, latency, and full I/O
+3. **Renders** a rich terminal tree
+4. **Exports** the trace to `.drishti/traces/` as JSON
+
+---
+
+## 📦 Installation
+
+```bash
+pip install drishti              # Core only (no provider SDKs)
+pip install drishti[openai]      # + OpenAI SDK
+pip install drishti[anthropic]   # + Anthropic SDK
+pip install drishti[groq]        # + Groq SDK
+pip install drishti[ollama]      # + Ollama SDK
+pip install drishti[all]         # All providers
+```
+
+**Requirements:** Python 3.10+
+
+---
+
+## 🎯 Supported Providers
+
+| Provider | SDK Method Patched | Pricing |
+|---|---|---|
+| **OpenAI** | `chat.completions.create` (sync + async) | gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo, o1, o1-mini, o3-mini |
+| **Anthropic** | `messages.create` (sync + async) | claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus, claude-sonnet-4 |
+| **Groq** | `chat.completions.create` (sync + async) | llama-3.3-70b, llama-3.1-8b, mixtral-8x7b |
+| **Ollama** | `chat()` (sync + async) | All local models — always $0.00 |
+
+> **Provider not installed?** Drishti skips it silently. No crash, no warning.
+>
+> **Unknown model?** Cost defaults to $0.00. Trace still works perfectly.
+
+---
+
+## 🖥️ CLI
+
+```bash
+# List all saved traces
+drishti list
+
+# Replay a trace in the terminal
+drishti view <file>          # by file path
+drishti view <id-prefix>     # by trace ID prefix
+
+# Delete all saved traces
+drishti clear
+```
+
+**Example output of `drishti list`:**
+```
+📋 Saved Traces
+
+  20260416_153042_research_agent.json  research-agent  success  1203 tokens  $0.0090
+  20260416_152801_claude_agent.json    claude-agent    error    0 tokens     $0.0000
+```
+
+---
+
+## ⚡ Async Support
+
+Drishti auto-detects async functions and Just Works™:
+
+```python
+from drishti import trace
+import openai
+
+client = openai.AsyncOpenAI()
+
+@trace(name="async-agent")
+async def async_agent(query: str) -> str:
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": query}],
+    )
+    return response.choices[0].message.content
+```
+
+---
+
+## ⚙️ Configuration
+
+### Per-call configuration
+
+```python
+@trace(
+    name="my-agent",      # Custom trace name (default: function name)
+    budget_usd=0.05,      # Warn if cost exceeds this amount
+    display=True,          # Print tree to terminal (default: True)
+    export=True,           # Save JSON to disk (default: True)
+)
+def my_agent():
+    ...
+```
+
+### Config file
+
+Create `.drishti/config.toml` in your project root:
+
+```toml
+[drishti]
+display = true              # Print trace tree to terminal
+export = true               # Save traces to disk
+traces_dir = ".drishti/traces"  # Where to save traces
+budget_usd = 0.10           # Warn if any trace exceeds this cost
+```
+
+### Decorator usage patterns
+
+```python
+# Bare decorator — name defaults to function name
+@trace
+def my_agent():
+    ...
+
+# With custom name
+@trace(name="research-agent")
+def my_agent():
+    ...
+
+# Budget guard
+@trace(budget_usd=0.05)
+def expensive_agent():
+    ...
+```
+
+---
+
+## 🛡️ Error Handling
+
+Drishti follows one golden rule: **never change the behavior of your agent code.**
+
+| Scenario | Drishti Behavior |
+|---|---|
+| Provider SDK not installed | Skipped silently, no crash |
+| LLM call raises exception | Span recorded with `status=ERROR`, exception re-raised |
+| Token usage missing | Defaults to 0, no crash |
+| Unknown model | Cost defaults to $0.00 |
+| JSON export fails | Warning printed, agent continues |
+| Display fails | Warning printed, agent continues |
+
+---
+
+## 📄 JSON Export Format
+
+Traces are saved to `.drishti/traces/` as JSON:
+
+```json
+{
+  "trace_id": "a1b2c3d4-...",
+  "name": "research-agent",
+  "started_at": "2026-04-16T15:30:42.123456+00:00",
+  "ended_at": "2026-04-16T15:30:42.634567+00:00",
+  "status": "success",
+  "summary": {
+    "total_tokens": 1203,
+    "total_cost_usd": 0.009,
+    "total_latency_ms": 511.0,
+    "span_count": 2
+  },
+  "spans": [
+    {
+      "span_id": "...",
+      "step": 1,
+      "name": "openai/gpt-4o-mini",
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "tokens": { "prompt": 45, "completion": 267, "total": 312 },
+      "cost_usd": 0.0001,
+      "latency_ms": 124.0,
+      "status": "success"
+    }
+  ]
+}
+```
+
+---
+
+## 🧪 Development
+
+```bash
+# Clone and setup
+git clone https://github.com/aarambh-darshan/drishti.git
+cd drishti
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev,all]"
+
+# Run tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=drishti --cov-report=term-missing
+
+# Lint
+ruff check drishti/ tests/
+ruff format --check drishti/ tests/
+```
+
+---
+
+## 🗺️ Roadmap
+
+| Version | Focus | Status |
+|---|---|---|
+| **v0.1.0** | Core Foundation | ✅ Released |
+| v0.2.0 | Developer Experience (trace diffing, streaming, budget abort) | 📋 Planned |
+| v0.3.0 | Web Dashboard (`drishti serve`) | 📋 Planned |
+| v0.4.0 | Smart Features (prompt analysis, cost optimization) | 🔮 Future |
+| v0.5.0 | Framework Integrations (LangChain, LlamaIndex) | 🔮 Future |
+| v1.0.0 | Production-Stable Release | 🔮 Future |
+
+See [ROADMAP.md](ROADMAP.md) for the full feature plan.
+
+---
+
+## 📐 Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete system design, including:
+- System architecture diagram
+- Data flow walkthrough
+- Provider interception strategy
+- Thread safety / async support design
+- Error handling philosophy
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+<p align="center">
+  <strong>Drishti (दृष्टि) — See what your agent thinks.</strong>
+</p>
