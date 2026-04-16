@@ -1,43 +1,37 @@
-"""
-Cost calculator — computes USD cost for a given provider/model/token usage.
-
-Supports exact model name matching and prefix matching for versioned models
-(e.g. "gpt-4o-2024-11-20" matches "gpt-4o").
-"""
+"""Cost calculator — computes USD cost for provider/model/token usage."""
 
 from __future__ import annotations
 
+from ..config import get_config
 from ..models.span import TokenUsage
 from .pricing import PRICING, UNKNOWN_COST
 
 
+def _build_pricing_table() -> dict[tuple[str, str], tuple[float, float]]:
+    table = dict(PRICING)
+    config = get_config()
+
+    for key, value in config.pricing_overrides.items():
+        if "/" not in key:
+            continue
+        provider, model = key.split("/", 1)
+        table[(provider.strip(), model.strip())] = value
+
+    return table
+
+
 def calculate_cost(provider: str, model: str, tokens: TokenUsage) -> float:
-    """
-    Calculate cost in USD for a given provider/model/token usage.
-
-    Returns 0.0 for unknown or local models — never crashes.
-
-    Args:
-        provider: Provider name (e.g. "openai", "anthropic", "groq", "ollama")
-        model: Model name (e.g. "gpt-4o", "claude-3-5-sonnet-20241022")
-        tokens: Token usage with prompt and completion counts
-
-    Returns:
-        Cost in USD, rounded to 6 decimal places.
-    """
+    """Calculate cost in USD for provider/model/token usage."""
+    pricing = _build_pricing_table()
     key = (provider, model)
 
-    # Try exact match first
-    price = PRICING.get(key)
-
-    # Prefix match for versioned model names (e.g. "gpt-4o-2024-11-20" → "gpt-4o")
+    price = pricing.get(key)
     if price is None:
-        for (p, m), v in PRICING.items():
+        for (p, m), v in pricing.items():
             if p == provider and model.startswith(m):
                 price = v
                 break
 
-    # Fallback to zero cost for unknown models
     if price is None:
         price = UNKNOWN_COST
 

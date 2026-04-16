@@ -132,14 +132,14 @@ v1.0.0                      ██  Stable release
 ## v0.1.x — Patch Releases
 
 ### v0.1.1
-- [ ] Fix: Handle OpenAI streaming responses (`stream=True`)
-- [ ] Fix: Handle Anthropic streaming responses
-- [ ] Pricing: Keep pricing table up to date with latest models
+- [x] Fix: Handle OpenAI streaming responses (`stream=True`)
+- [x] Fix: Handle Anthropic streaming responses
+- [x] Pricing: Keep pricing table up to date with latest models
 
 ### v0.1.2
-- [ ] Add `drishti version` CLI command
-- [ ] Improve error messages when SDK is not installed
-- [ ] Add `examples/multi_step_agent.py` with a realistic research agent
+- [x] Add `drishti version` CLI command
+- [x] Improve error messages when SDK is not installed
+- [x] Add `examples/multi_step_agent.py` with a realistic research agent
 
 ---
 
@@ -152,55 +152,55 @@ v1.0.0                      ██  Stable release
 ### Features
 
 #### Trace Diffing
-- [ ] `drishti diff <trace1.json> <trace2.json>` CLI command
-- [ ] Side-by-side comparison: steps, tokens, cost, latency
-- [ ] Highlights: which steps are new, which changed, which got faster/slower/cheaper
-- [ ] Use case: compare two versions of your agent prompt to see token impact
+- [x] `drishti diff <trace1.json> <trace2.json>` CLI command
+- [x] Side-by-side comparison: steps, tokens, cost, latency
+- [x] Highlights: which steps are new, which changed, which got faster/slower/cheaper
+- [x] Use case: compare two versions of your agent prompt to see token impact
 
 #### Budget Guard (Hard Abort)
-- [ ] `@trace(budget_usd=0.05, on_exceed="abort")` — raises `DrishtiBudgetError` mid-execution
-- [ ] `on_exceed="warn"` (default, existing behavior) vs `"abort"`
-- [ ] Budget check happens after each span, not just at the end
-- [ ] `DrishtiBudgetError` includes trace up to the point of abort
+- [x] `@trace(budget_usd=0.05, on_exceed="abort")` — raises `DrishtiBudgetError` mid-execution
+- [x] `on_exceed="warn"` (default, existing behavior) vs `"abort"`
+- [x] Budget check happens after each span, not just at the end
+- [x] `DrishtiBudgetError` includes trace up to the point of abort
 
 #### Streaming Support
-- [ ] OpenAI streaming: `stream=True` — capture chunks, count tokens at end
-- [ ] Anthropic streaming — same
-- [ ] Show streaming spans in tree with a `⚡ streaming` label
-- [ ] Token count from streaming: use tiktoken for client-side estimation when usage not provided
+- [x] OpenAI streaming: `stream=True` — capture chunks, count tokens at end
+- [x] Anthropic streaming — same
+- [x] Show streaming spans in tree with a `⚡ streaming` label
+- [x] Token count from streaming: use tiktoken for client-side estimation when usage not provided
 
 #### `.drishti/config.toml` — Full Implementation
-- [ ] Custom pricing overrides per model
-- [ ] `default_export_dir` — save traces to a custom path
-- [ ] `auto_open_on_error = true` — auto-run `drishti view` on the last trace when an error occurs
-- [ ] `quiet = true` — suppress display output (keep export only)
+- [x] Custom pricing overrides per model
+- [x] `default_export_dir` — save traces to a custom path
+- [x] `auto_open_on_error = true` — auto-run `drishti view` on the last trace when an error occurs
+- [x] `quiet = true` — suppress display output (keep export only)
 
 #### Output Quality
-- [ ] Truncate long prompt/completion in tree view (configurable max chars)
-- [ ] `drishti view --full` to show full input/output in terminal
-- [ ] Color-code cost: green ($0.00–$0.01), yellow ($0.01–$0.10), red ($0.10+)
-- [ ] Show model name and provider separately in tree
+- [x] Truncate long prompt/completion in tree view (configurable max chars)
+- [x] `drishti view --full` to show full input/output in terminal
+- [x] Color-code cost: green ($0.00–$0.01), yellow ($0.01–$0.10), red ($0.10+)
+- [x] Show model name and provider separately in tree
 
 #### New CLI Commands
-- [ ] `drishti stats` — aggregate stats across all saved traces (total cost, avg tokens, most expensive agent)
-- [ ] `drishti export <trace.json> --format csv` — export trace as CSV for spreadsheet analysis
+- [x] `drishti stats` — aggregate stats across all saved traces (total cost, avg tokens, most expensive agent)
+- [x] `drishti export <trace.json> --format csv` — export trace as CSV for spreadsheet analysis
 
 #### Packaging
-- [ ] Python 3.10 compatibility (currently targeting 3.11+)
-- [ ] Type stubs (`py.typed` marker, full type annotations)
+- [x] Python 3.10 compatibility (currently targeting 3.11+)
+- [x] Type stubs (`py.typed` marker, full type annotations)
 
 ---
 
 ## v0.2.x — Patch Releases
 
 ### v0.2.1
-- [ ] Add Mistral AI provider interceptor
-- [ ] Add Together AI provider interceptor
-- [ ] Add Cohere provider interceptor
+- [x] Add Mistral AI provider interceptor
+- [x] Add Together AI provider interceptor
+- [x] Add Cohere provider interceptor
 
 ### v0.2.2
-- [ ] Fix edge cases in thread-safety under heavy concurrent load
-- [ ] Add `drishti replay <trace.json>` — resend the exact same prompts and compare results
+- [x] Fix edge cases in thread-safety under heavy concurrent load
+- [x] Add `drishti replay <trace.json>` — resend the exact same prompts and compare results
 
 ---
 

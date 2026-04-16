@@ -77,3 +77,21 @@ class TestCollector:
     def test_end_trace_returns_none_when_no_trace(self):
         result = collector.end_trace()
         assert result is None
+
+    def test_nested_trace_stack(self):
+        outer = Trace(name="outer")
+        inner = Trace(name="inner")
+
+        collector.start_trace(outer)
+        assert collector.active_trace is outer
+
+        collector.start_trace(inner)
+        assert collector.active_trace is inner
+
+        ended_inner = collector.end_trace()
+        assert ended_inner is inner
+        assert collector.active_trace is outer
+
+        ended_outer = collector.end_trace()
+        assert ended_outer is outer
+        assert collector.active_trace is None

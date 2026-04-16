@@ -1,20 +1,21 @@
-"""
-Provider interceptors registry.
-
-Maintains the list of all interceptor instances. The @trace decorator
-iterates this list to patch() and unpatch() all providers in one call.
-"""
+"""Provider interceptors registry."""
 
 from .anthropic import AnthropicInterceptor
+from .cohere import CohereInterceptor
 from .groq import GroqInterceptor
+from .mistral import MistralInterceptor
 from .ollama import OllamaInterceptor
 from .openai import OpenAIInterceptor
+from .together import TogetherInterceptor
 
 ALL_INTERCEPTORS = [
     OpenAIInterceptor(),
     AnthropicInterceptor(),
     GroqInterceptor(),
     OllamaInterceptor(),
+    MistralInterceptor(),
+    TogetherInterceptor(),
+    CohereInterceptor(),
 ]
 
 __all__ = ["ALL_INTERCEPTORS"]

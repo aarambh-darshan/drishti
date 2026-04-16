@@ -1,5 +1,6 @@
 """Tests for OpenAI provider interceptor."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,6 +22,20 @@ def _make_mock_response(prompt_tokens=100, completion_tokens=50, total_tokens=15
     return response
 
 
+def _make_stream_chunk(text: str, *, prompt_tokens: int = 0, completion_tokens: int = 0):
+    usage = None
+    if prompt_tokens or completion_tokens:
+        usage = SimpleNamespace(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
+    return SimpleNamespace(
+        choices=[SimpleNamespace(delta=SimpleNamespace(content=text))],
+        usage=usage,
+    )
+
+
 class TestOpenAIInterceptor:
     def test_provider_name(self):
         interceptor = OpenAIInterceptor()
@@ -29,7 +44,6 @@ class TestOpenAIInterceptor:
     def test_skip_if_not_installed(self):
         """Should not crash if openai is not installed."""
         interceptor = OpenAIInterceptor()
-        # This will attempt to import openai — if not installed, should skip
         interceptor.patch()
         interceptor.unpatch()
 
@@ -152,3 +166,103 @@ class TestOpenAIInterceptor:
             assert len(trace.spans) == 1
             assert trace.spans[0].status == SpanStatus.ERROR
             assert "API Error" in trace.spans[0].error
+
+    def test_streaming_sync_interception(self):
+        """Stream responses should be captured when consumed."""
+        stream_chunks = [
+            _make_stream_chunk("Hello "),
+            _make_stream_chunk("world!", prompt_tokens=100, completion_tokens=20),
+        ]
+
+        mock_completions_cls = type("Completions", (), {})
+        mock_completions_cls.create = MagicMock(return_value=iter(stream_chunks))
+
+        mock_async_cls = type("AsyncCompletions", (), {})
+        mock_async_cls.create = MagicMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "openai": MagicMock(),
+                "openai.resources": MagicMock(),
+                "openai.resources.chat": MagicMock(),
+                "openai.resources.chat.completions": MagicMock(
+                    Completions=mock_completions_cls,
+                    AsyncCompletions=mock_async_cls,
+                ),
+            },
+        ):
+            interceptor = OpenAIInterceptor()
+            trace = Trace(name="test")
+            collector.start_trace(trace)
+            interceptor.patch()
+
+            mock_self = MagicMock()
+            stream = mock_completions_cls.create(
+                mock_self,
+                model="gpt-4o",
+                messages=[{"role": "user", "content": "hello"}],
+                stream=True,
+            )
+            list(stream)
+
+            interceptor.unpatch()
+            collector.end_trace()
+
+            assert len(trace.spans) == 1
+            span = trace.spans[0]
+            assert span.streaming is True
+            assert span.status == SpanStatus.SUCCESS
+            assert span.tokens.total_tokens == 120
+
+    def test_streaming_estimates_tokens_when_usage_missing(self):
+        stream_chunks = [_make_stream_chunk("Hello"), _make_stream_chunk(" world")]
+
+        mock_completions_cls = type("Completions", (), {})
+        mock_completions_cls.create = MagicMock(return_value=iter(stream_chunks))
+
+        mock_async_cls = type("AsyncCompletions", (), {})
+        mock_async_cls.create = MagicMock()
+
+        class _Enc:
+            @staticmethod
+            def encode(text):
+                return list(range(len(text)))
+
+        fake_tiktoken = MagicMock()
+        fake_tiktoken.encoding_for_model.return_value = _Enc()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "openai": MagicMock(),
+                "openai.resources": MagicMock(),
+                "openai.resources.chat": MagicMock(),
+                "openai.resources.chat.completions": MagicMock(
+                    Completions=mock_completions_cls,
+                    AsyncCompletions=mock_async_cls,
+                ),
+                "tiktoken": fake_tiktoken,
+            },
+        ):
+            interceptor = OpenAIInterceptor()
+            trace = Trace(name="test")
+            collector.start_trace(trace)
+            interceptor.patch()
+
+            mock_self = MagicMock()
+            stream = mock_completions_cls.create(
+                mock_self,
+                model="gpt-4o",
+                messages=[{"role": "user", "content": "hello"}],
+                stream=True,
+            )
+            list(stream)
+
+            interceptor.unpatch()
+            collector.end_trace()
+
+            span = trace.spans[0]
+            assert span.estimated_tokens is True
+            assert span.estimation_source == "tiktoken"
+            assert span.tokens.total_tokens > 0

@@ -60,6 +60,7 @@ class TestExportTrace:
         data = json.loads(path.read_text())
 
         # Top-level fields
+        assert data["schema_version"] == "0.2.2"
         assert "trace_id" in data
         assert data["name"] == "test-export"
         assert data["status"] == "success"

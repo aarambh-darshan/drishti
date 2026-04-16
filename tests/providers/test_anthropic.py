@@ -1,5 +1,6 @@
 """Tests for Anthropic provider interceptor."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,6 +19,21 @@ def _make_mock_response(input_tokens=100, output_tokens=50):
     response.content = [MagicMock()]
     response.content[0].text = "Hello!"
     return response
+
+
+def _make_stream_chunk(text: str, *, input_tokens: int = 0, output_tokens: int = 0):
+    usage = None
+    if input_tokens or output_tokens:
+        usage = SimpleNamespace(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+        )
+    return SimpleNamespace(
+        type="content_block_delta",
+        delta=SimpleNamespace(text=text),
+        usage=usage,
+    )
 
 
 class TestAnthropicInterceptor:
@@ -111,3 +127,49 @@ class TestAnthropicInterceptor:
             collector.end_trace()
 
             assert trace.spans[0].status == SpanStatus.ERROR
+
+    def test_streaming_sync_interception(self):
+        stream_chunks = [
+            _make_stream_chunk("A"),
+            _make_stream_chunk("B", input_tokens=90, output_tokens=10),
+        ]
+
+        mock_messages_cls = type("Messages", (), {})
+        mock_messages_cls.create = MagicMock(return_value=iter(stream_chunks))
+
+        mock_async_cls = type("AsyncMessages", (), {})
+        mock_async_cls.create = MagicMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "anthropic": MagicMock(),
+                "anthropic.resources": MagicMock(),
+                "anthropic.resources.messages": MagicMock(
+                    Messages=mock_messages_cls,
+                    AsyncMessages=mock_async_cls,
+                ),
+            },
+        ):
+            interceptor = AnthropicInterceptor()
+
+            trace = Trace(name="test")
+            collector.start_trace(trace)
+            interceptor.patch()
+
+            mock_self = MagicMock()
+            stream = mock_messages_cls.create(
+                mock_self,
+                model="claude-3-5-sonnet-20241022",
+                messages=[{"role": "user", "content": "hi"}],
+                stream=True,
+            )
+            list(stream)
+
+            interceptor.unpatch()
+            collector.end_trace()
+
+            assert len(trace.spans) == 1
+            span = trace.spans[0]
+            assert span.streaming is True
+            assert span.tokens.total_tokens == 100

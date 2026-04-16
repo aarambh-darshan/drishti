@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] — 2026-04-16
+
+### Added
+
+- Streaming interception support for OpenAI and Anthropic (`stream=True`, sync + async)
+- `on_exceed` budget policy with hard-abort support and `DrishtiBudgetError`
+- Stack-based nested trace context handling and patch lifecycle manager for concurrent traces
+- New CLI commands: `drishti version`, `drishti diff`, `drishti stats`, `drishti export --format csv`, `drishti replay`
+- Extended trace JSON schema with `schema_version`, `streaming`, `estimated_tokens`, and `request_payload`
+- New provider interceptors: Mistral, Together, Cohere
+- Config additions: `default_export_dir`, `quiet`, `auto_open_on_error`, `max_preview_chars`, `estimate_stream_tokens`
+- `examples/multi_step_agent.py`
+
+### Changed
+
+- Provider missing dependency handling now emits one-time actionable warnings
+- Display output now shows provider/model separately, cost color thresholds, streaming label, and truncated I/O previews
+- Trace replay and diff workflows now available in CLI
+- Added `py.typed` marker and updated optional dependency extras
+
+---
+
 ## [0.1.0] — 2026-04-16
 
 ### 🎉 Initial Release — Core Foundation
@@ -98,3 +120,4 @@ The first release of Drishti — a Python library that automatically captures, v
 ---
 
 [0.1.0]: https://github.com/aarambh-darshan/drishti/releases/tag/v0.1.0
+[0.2.2]: https://github.com/aarambh-darshan/drishti/releases/tag/v0.2.2

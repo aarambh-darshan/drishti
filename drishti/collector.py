@@ -1,82 +1,132 @@
-"""
-Collector — global trace context registry.
-
-The Collector holds the currently active Trace. Provider interceptors call
-the Collector to register new spans. The @trace decorator activates and
-deactivates the Collector.
-
-Uses both threading.local() (for sync threads) and contextvars.ContextVar
-(for async coroutines) to ensure correct isolation in all concurrency modes.
-"""
+"""Collector — global trace context registry."""
 
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import threading
-from typing import Optional
+from dataclasses import dataclass
+from typing import Literal
 
-from .models.span import Span
+from .errors import DrishtiBudgetError
+from .models.span import Span, SpanStatus
 from .models.trace import Trace
 
 
-# ContextVar for async coroutine safety
-_active_trace_var: contextvars.ContextVar[Optional[Trace]] = contextvars.ContextVar(
-    "drishti_active_trace", default=None
+@dataclass(slots=True)
+class TraceContext:
+    """Runtime context for an active trace."""
+
+    trace: Trace
+    budget_usd: float | None = None
+    on_exceed: Literal["warn", "abort"] = "warn"
+
+
+_trace_stack_var: contextvars.ContextVar[tuple[TraceContext, ...]] = contextvars.ContextVar(
+    "drishti_trace_stack", default=()
 )
 
 
 class _Collector:
-    """
-    Thread-local + ContextVar singleton.
-
-    Each thread has its own active trace (via threading.local).
-    Each async coroutine has its own active trace (via ContextVar).
-    This allows multiple agents to run concurrently without interference.
-    """
+    """Thread-local + ContextVar trace collector with stack-based nesting support."""
 
     def __init__(self) -> None:
         self._local = threading.local()
 
+    def _thread_stack(self) -> list[TraceContext]:
+        stack = getattr(self._local, "trace_stack", None)
+        if stack is None:
+            stack = []
+            self._local.trace_stack = stack
+        return stack
+
+    @staticmethod
+    def _in_async_context() -> bool:
+        try:
+            return asyncio.current_task() is not None
+        except RuntimeError:
+            return False
+
     @property
-    def active_trace(self) -> Optional[Trace]:
-        """Get the currently active trace, checking ContextVar first, then thread-local."""
-        # ContextVar takes priority (covers async case)
-        trace = _active_trace_var.get(None)
-        if trace is not None:
-            return trace
-        # Fall back to thread-local (sync case)
-        return getattr(self._local, "trace", None)
+    def active_context(self) -> TraceContext | None:
+        """Get currently active trace context (nested-safe)."""
+        ctx_stack = _trace_stack_var.get(())
+        if ctx_stack:
+            return ctx_stack[-1]
 
-    def start_trace(self, trace: Trace) -> None:
-        """Called by @trace decorator at entry. Sets the active trace in both stores."""
-        self._local.trace = trace
-        _active_trace_var.set(trace)
+        thread_stack = self._thread_stack()
+        if thread_stack:
+            return thread_stack[-1]
+        return None
 
-    def end_trace(self) -> Optional[Trace]:
-        """Called by @trace decorator at exit. Returns completed trace and clears state."""
-        trace = self.active_trace
-        self._local.trace = None
-        _active_trace_var.set(None)
-        return trace
+    @property
+    def active_trace(self) -> Trace | None:
+        """Get currently active trace."""
+        context = self.active_context
+        return context.trace if context else None
+
+    def start_trace(
+        self,
+        trace: Trace,
+        budget_usd: float | None = None,
+        on_exceed: Literal["warn", "abort"] = "warn",
+    ) -> None:
+        """Push a new active trace context."""
+        context = TraceContext(trace=trace, budget_usd=budget_usd, on_exceed=on_exceed)
+
+        if not self._in_async_context():
+            thread_stack = self._thread_stack()
+            thread_stack.append(context)
+
+        ctx_stack = list(_trace_stack_var.get(()))
+        ctx_stack.append(context)
+        _trace_stack_var.set(tuple(ctx_stack))
+
+    def end_trace(self) -> Trace | None:
+        """Pop active trace context and return trace."""
+        popped: TraceContext | None = None
+
+        ctx_stack = list(_trace_stack_var.get(()))
+        if ctx_stack:
+            popped = ctx_stack.pop()
+            _trace_stack_var.set(tuple(ctx_stack))
+
+        if not self._in_async_context():
+            thread_stack = self._thread_stack()
+            if thread_stack:
+                popped = thread_stack.pop()
+
+        if popped is None:
+            return None
+        return popped.trace
 
     def record_span(self, span: Span) -> None:
-        """
-        Called by provider interceptors when a span is completed.
+        """Record a span on active trace; enforce budget abort when configured."""
+        context = self.active_context
+        if context is None:
+            return
 
-        Auto-assigns step number and appends to the active trace.
-        Silently ignored if no trace is active (pure passthrough mode).
-        """
-        trace = self.active_trace
-        if trace is None:
-            return  # No active trace, silently ignore
+        trace = context.trace
         span.step = len(trace.spans) + 1
         trace.spans.append(span)
 
+        if (
+            span.status == SpanStatus.SUCCESS
+            and context.budget_usd is not None
+            and context.on_exceed == "abort"
+            and trace.total_cost_usd > context.budget_usd
+        ):
+            raise DrishtiBudgetError(
+                trace=trace,
+                budget_usd=context.budget_usd,
+                actual_cost_usd=trace.total_cost_usd,
+                span_step=span.step,
+            )
+
     @property
     def is_active(self) -> bool:
-        """True if there is an active trace context."""
-        return self.active_trace is not None
+        """True when there is at least one active trace on the stack."""
+        return self.active_context is not None
 
 
-# Global singleton — import this everywhere
 collector = _Collector()

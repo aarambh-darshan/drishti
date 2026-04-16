@@ -9,6 +9,8 @@ from drishti.collector import collector
 from drishti.config import reset_config
 from drishti.models.span import Span, TokenUsage
 from drishti.models.trace import Trace, TraceStatus
+from drishti.providers.manager import patch_manager
+from drishti.token_estimation import reset_token_estimation_warnings
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +27,15 @@ def _reset_config():
     reset_config()
     yield
     reset_config()
+
+
+@pytest.fixture(autouse=True)
+def _reset_runtime_globals():
+    """Reset shared global runtime state between tests."""
+    patch_manager.reset()
+    reset_token_estimation_warnings()
+    yield
+    patch_manager.reset()
 
 
 @pytest.fixture

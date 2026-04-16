@@ -1,69 +1,36 @@
-"""
-@trace decorator — the single user-facing entry point for Drishti.
-
-Usage:
-    from drishti import trace
-
-    @trace
-    def run_agent(query):
-        response = openai.chat.completions.create(...)
-        return response
-
-    @trace(name="my-agent", budget_usd=0.05)
-    def run_agent(query):
-        ...
-
-    @trace
-    async def async_agent(query):
-        ...
-
-The decorator:
-1. Creates a new Trace
-2. Activates all provider patches
-3. Runs the user function
-4. Deactivates patches
-5. Finalizes the trace
-6. Renders the display (if enabled)
-7. Exports to JSON (if enabled)
-8. Returns the function result unchanged
-"""
+"""@trace decorator — the single user-facing entry point for Drishti."""
 
 from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import uuid
 import warnings
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Literal
 
 from .collector import collector
-from .config import get_config
-from .display.summary import render_summary
-from .display.tree import render_trace_tree
+from .config import DrishtiConfig, get_config
+from .display.summary import render_summary, render_summary_from_dict
+from .display.tree import render_trace_from_dict, render_trace_tree
+from .errors import DrishtiBudgetError
 from .export.json import export_trace
 from .models.trace import Trace, TraceStatus
-from .providers import ALL_INTERCEPTORS
+from .providers.manager import patch_manager
 
 
 def trace(
-    name: Optional[str] = None,
+    name: str | None = None,
     export: bool = True,
     display: bool = True,
-    budget_usd: Optional[float] = None,
+    budget_usd: float | None = None,
+    on_exceed: Literal["warn", "abort"] = "warn",
 ):
-    """
-    Decorator to trace all LLM calls inside the decorated function.
+    """Decorator to trace all LLM calls inside the decorated function."""
 
-    Args:
-        name: Custom name for the trace. Defaults to the function name.
-        export: Whether to save the trace to a JSON file.
-        display: Whether to print the trace tree to the terminal.
-        budget_usd: Warn if the trace cost exceeds this amount in USD.
-
-    Supports both @trace (bare) and @trace(name="foo") (with args).
-    Automatically detects async functions and returns the correct wrapper.
-    """
+    if on_exceed not in {"warn", "abort"}:
+        raise ValueError("on_exceed must be 'warn' or 'abort'")
 
     def decorator(func: Callable) -> Callable:
         trace_name = name or func.__name__
@@ -71,18 +38,19 @@ def trace(
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             cfg = get_config()
+            effective_budget = budget_usd if budget_usd is not None else cfg.budget_usd
+            effective_on_exceed = on_exceed or cfg.on_exceed
+
             t = Trace(
                 trace_id=str(uuid.uuid4()),
                 name=trace_name,
                 started_at=datetime.now(timezone.utc),
             )
 
-            # Activate
-            collector.start_trace(t)
-            for interceptor in ALL_INTERCEPTORS:
-                interceptor.patch()
+            collector.start_trace(t, budget_usd=effective_budget, on_exceed=effective_on_exceed)
+            patch_manager.acquire()
 
-            result = None
+            result: Any = None
             try:
                 result = func(*args, **kwargs)
                 t.status = TraceStatus.SUCCESS
@@ -90,32 +58,37 @@ def trace(
                 t.status = TraceStatus.ERROR
                 raise
             finally:
-                # Always deactivate, even on exception
-                for interceptor in ALL_INTERCEPTORS:
-                    interceptor.unpatch()
+                patch_manager.release()
                 t.ended_at = datetime.now(timezone.utc)
                 collector.end_trace()
 
-                # Display + Export happen regardless of success/failure
-                _post_trace(t, cfg, display, export, budget_usd)
+                _post_trace(
+                    trace=t,
+                    cfg=cfg,
+                    display=display,
+                    export_flag=export,
+                    budget_usd=effective_budget,
+                    on_exceed=effective_on_exceed,
+                )
 
             return result
 
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             cfg = get_config()
+            effective_budget = budget_usd if budget_usd is not None else cfg.budget_usd
+            effective_on_exceed = on_exceed or cfg.on_exceed
+
             t = Trace(
                 trace_id=str(uuid.uuid4()),
                 name=trace_name,
                 started_at=datetime.now(timezone.utc),
             )
 
-            # Activate
-            collector.start_trace(t)
-            for interceptor in ALL_INTERCEPTORS:
-                interceptor.patch()
+            collector.start_trace(t, budget_usd=effective_budget, on_exceed=effective_on_exceed)
+            patch_manager.acquire()
 
-            result = None
+            result: Any = None
             try:
                 result = await func(*args, **kwargs)
                 t.status = TraceStatus.SUCCESS
@@ -123,23 +96,26 @@ def trace(
                 t.status = TraceStatus.ERROR
                 raise
             finally:
-                for interceptor in ALL_INTERCEPTORS:
-                    interceptor.unpatch()
+                patch_manager.release()
                 t.ended_at = datetime.now(timezone.utc)
                 collector.end_trace()
 
-                _post_trace(t, cfg, display, export, budget_usd)
+                _post_trace(
+                    trace=t,
+                    cfg=cfg,
+                    display=display,
+                    export_flag=export,
+                    budget_usd=effective_budget,
+                    on_exceed=effective_on_exceed,
+                )
 
             return result
 
-        # Return the correct wrapper based on function type
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
 
-    # Handle bare @trace (no parentheses) vs @trace(...) (with args)
     if callable(name):
-        # Called as @trace without parentheses — name is actually the function
         func, name = name, None
         return decorator(func)
 
@@ -147,29 +123,51 @@ def trace(
 
 
 def _post_trace(
-    t: Trace,
-    cfg: Any,
+    *,
+    trace: Trace,
+    cfg: DrishtiConfig,
     display: bool,
     export_flag: bool,
-    budget_usd: Optional[float],
+    budget_usd: float | None,
+    on_exceed: Literal["warn", "abort"],
 ) -> None:
-    """Run display, export, and budget check after a trace completes."""
-    try:
-        if display and cfg.display:
-            render_trace_tree(t)
-            render_summary(t)
-    except Exception:
-        pass  # Display failure must never crash the user's code
+    """Run display, export, and post-run budget checks after a trace completes."""
+    displayed = False
+    if display and cfg.display and not cfg.quiet:
+        try:
+            render_trace_tree(trace, full=False, max_preview_chars=cfg.max_preview_chars)
+            render_summary(trace)
+            displayed = True
+        except Exception:
+            pass
 
-    try:
-        if export_flag and cfg.export:
-            export_trace(t, cfg.traces_dir)
-    except Exception:
-        warnings.warn("[Drishti] Failed to export trace to JSON.")
+    exported_path = None
+    if export_flag and cfg.export:
+        try:
+            exported_path = export_trace(trace, cfg.export_dir)
+        except Exception:
+            warnings.warn("[Drishti] Failed to export trace to JSON.", RuntimeWarning, stacklevel=2)
 
-    # Budget guard (post-run warning for v0.1)
-    effective_budget = budget_usd or cfg.budget_usd
-    if effective_budget and t.total_cost_usd > effective_budget:
+    if (
+        trace.status == TraceStatus.ERROR
+        and cfg.auto_open_on_error
+        and exported_path is not None
+        and not cfg.quiet
+        and not displayed
+    ):
+        try:
+            data = json.loads(exported_path.read_text(encoding="utf-8"))
+            render_trace_from_dict(data, full=False, max_preview_chars=cfg.max_preview_chars)
+            render_summary_from_dict(data)
+        except Exception:
+            pass
+
+    if on_exceed == "warn" and budget_usd is not None and trace.total_cost_usd > budget_usd:
         warnings.warn(
-            f"[Drishti] Budget exceeded: ${t.total_cost_usd:.4f} > ${effective_budget:.4f}"
+            f"[Drishti] Budget exceeded: ${trace.total_cost_usd:.4f} > ${budget_usd:.4f}",
+            RuntimeWarning,
+            stacklevel=2,
         )
+
+
+__all__ = ["trace", "DrishtiBudgetError"]

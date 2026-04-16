@@ -1,9 +1,4 @@
-"""
-Trace model — the complete record of one @trace-decorated function call.
-
-A Trace holds all spans captured during a single invocation of a traced
-function, along with top-level metadata: name, timing, and aggregate status.
-"""
+"""Trace model — the complete record of one @trace-decorated function call."""
 
 from __future__ import annotations
 
@@ -11,7 +6,6 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
 
 from .span import Span, SpanStatus, TokenUsage
 
@@ -21,30 +15,21 @@ class TraceStatus(str, Enum):
 
     RUNNING = "running"
     SUCCESS = "success"
-    ERROR = "error"  # at least one span failed or the function raised
+    ERROR = "error"
 
 
-@dataclass
+@dataclass(slots=True)
 class Trace:
-    """
-    Complete record of one @trace-decorated function execution.
+    """Complete record of one @trace-decorated function execution."""
 
-    Aggregate metrics (total_tokens, total_cost_usd) are computed properties,
-    not stored fields. This avoids inconsistency if spans are added post-hoc.
-    """
-
-    # Identity
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    name: str = ""  # from @trace(name=...) or function name
+    name: str = ""
 
-    # Timing
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    ended_at: Optional[datetime] = None
+    ended_at: datetime | None = None
 
-    # Spans
-    spans: List[Span] = field(default_factory=list)
+    spans: list[Span] = field(default_factory=list)
 
-    # Status
     status: TraceStatus = TraceStatus.RUNNING
 
     @property
@@ -75,6 +60,6 @@ class Trace:
         return len(self.spans)
 
     @property
-    def failed_spans(self) -> List[Span]:
+    def failed_spans(self) -> list[Span]:
         """List of spans that failed."""
         return [s for s in self.spans if s.status == SpanStatus.ERROR]

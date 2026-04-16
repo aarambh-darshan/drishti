@@ -36,6 +36,8 @@ class TestSpan:
         assert span.cost_usd == 0.0
         assert span.latency_ms == 0.0
         assert span.error is None
+        assert span.streaming is False
+        assert span.estimated_tokens is False
 
     def test_creation_with_values(self):
         span = Span(

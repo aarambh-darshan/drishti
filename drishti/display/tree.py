@@ -1,14 +1,9 @@
-"""
-Tree renderer — visualizes a Trace as a Rich terminal tree.
-
-Shows every span with step number, status icon, provider/model,
-token count, cost, and latency. Error details are shown inline
-under failed spans.
-"""
+"""Tree renderer — visualizes a Trace as a Rich terminal tree."""
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import json
+from typing import Any
 
 from rich.console import Console
 from rich.text import Text
@@ -20,13 +15,87 @@ from ..models.trace import Trace
 console = Console()
 
 
-def render_trace_tree(trace: Trace) -> None:
-    """
-    Render a Trace object as a Rich tree in the terminal.
+def _cost_style(cost: float) -> str:
+    if cost < 0.01:
+        return "green"
+    if cost < 0.10:
+        return "yellow"
+    return "red"
 
-    Args:
-        trace: The completed Trace to render.
-    """
+
+def _serialize_preview(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, default=str, ensure_ascii=False)
+    except Exception:
+        return str(value)
+
+
+def _truncate(text: str, max_chars: int, full: bool) -> str:
+    if full:
+        return text
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1] + "…"
+
+
+def _render_span_node(
+    tree: Tree,
+    *,
+    step: int,
+    status: str,
+    provider: str,
+    model: str,
+    total_tokens: int,
+    cost_usd: float,
+    latency_ms: float,
+    streaming: bool,
+    error: str | None,
+    error_type: str | None,
+    input_data: Any,
+    output_data: Any,
+    full: bool,
+    max_preview_chars: int,
+) -> None:
+    if status == SpanStatus.SUCCESS.value:
+        icon = "[green]✅[/green]"
+    elif status == SpanStatus.ERROR.value:
+        icon = "[red]❌[/red]"
+    else:
+        icon = "[yellow]⏳[/yellow]"
+
+    stream_label = " [yellow]⚡ streaming[/yellow]" if streaming else ""
+    cost_color = _cost_style(cost_usd)
+
+    label = (
+        f"{icon} [dim][{step}][/dim] "
+        f"[bold]{provider}[/bold] "
+        f"[magenta]{model}[/magenta]  "
+        f"[cyan]{total_tokens} tokens[/cyan]  "
+        f"[{cost_color}]${cost_usd:.4f}[/{cost_color}]  "
+        f"[dim]{latency_ms:.0f}ms[/dim]"
+        f"{stream_label}"
+    )
+
+    node = tree.add(label)
+
+    preview_input = _truncate(_serialize_preview(input_data), max_preview_chars, full)
+    preview_output = _truncate(_serialize_preview(output_data), max_preview_chars, full)
+
+    if preview_input:
+        node.add(f"[dim]input:[/dim] {preview_input}")
+    if preview_output:
+        node.add(f"[dim]output:[/dim] {preview_output}")
+
+    if status == SpanStatus.ERROR.value and error:
+        node.add(f"[red]{error_type or 'Error'}: {error}[/red]")
+
+
+def render_trace_tree(trace: Trace, full: bool = False, max_preview_chars: int = 220) -> None:
+    """Render a Trace object as a Rich tree in the terminal."""
     root_label = Text()
     root_label.append("🔍 Drishti Trace", style="bold cyan")
     root_label.append(f" — {trace.name}", style="bold white")
@@ -34,39 +103,33 @@ def render_trace_tree(trace: Trace) -> None:
     tree = Tree(root_label)
 
     for span in trace.spans:
-        # Status icon
-        if span.status == SpanStatus.SUCCESS:
-            icon = "[green]✅[/green]"
-        elif span.status == SpanStatus.ERROR:
-            icon = "[red]❌[/red]"
-        else:
-            icon = "[yellow]⏳[/yellow]"
-
-        # Build node label
-        label = (
-            f"{icon} [dim][{span.step}][/dim] "
-            f"[bold]{span.name}[/bold]  "
-            f"[cyan]{span.tokens.total_tokens} tokens[/cyan]  "
-            f"[yellow]${span.cost_usd:.4f}[/yellow]  "
-            f"[dim]{span.latency_ms:.0f}ms[/dim]"
+        _render_span_node(
+            tree,
+            step=span.step,
+            status=span.status.value,
+            provider=span.provider,
+            model=span.model,
+            total_tokens=span.tokens.total_tokens,
+            cost_usd=span.cost_usd,
+            latency_ms=span.latency_ms,
+            streaming=span.streaming,
+            error=span.error,
+            error_type=span.error_type,
+            input_data=span.input,
+            output_data=span.output,
+            full=full,
+            max_preview_chars=max_preview_chars,
         )
-
-        node = tree.add(label)
-
-        # Show error detail inline under failed spans
-        if span.status == SpanStatus.ERROR and span.error:
-            node.add(f"[red]{span.error_type}: {span.error}[/red]")
 
     console.print(tree)
 
 
-def render_trace_from_dict(data: Dict[str, Any]) -> None:
-    """
-    Render a trace from a deserialized JSON dict (for CLI 'view' command).
-
-    Args:
-        data: The trace data loaded from a JSON file.
-    """
+def render_trace_from_dict(
+    data: dict[str, Any],
+    full: bool = False,
+    max_preview_chars: int = 220,
+) -> None:
+    """Render a trace from a deserialized JSON dict."""
     root_label = Text()
     root_label.append("🔍 Drishti Trace", style="bold cyan")
     root_label.append(f" — {data.get('name', 'unknown')}", style="bold white")
@@ -74,30 +137,23 @@ def render_trace_from_dict(data: Dict[str, Any]) -> None:
     tree = Tree(root_label)
 
     for span_data in data.get("spans", []):
-        status = span_data.get("status", "pending")
-
-        if status == "success":
-            icon = "[green]✅[/green]"
-        elif status == "error":
-            icon = "[red]❌[/red]"
-        else:
-            icon = "[yellow]⏳[/yellow]"
-
         tokens = span_data.get("tokens", {})
-        total_tokens = tokens.get("total", 0)
-
-        label = (
-            f"{icon} [dim][{span_data.get('step', '?')}][/dim] "
-            f"[bold]{span_data.get('name', 'unknown')}[/bold]  "
-            f"[cyan]{total_tokens} tokens[/cyan]  "
-            f"[yellow]${span_data.get('cost_usd', 0):.4f}[/yellow]  "
-            f"[dim]{span_data.get('latency_ms', 0):.0f}ms[/dim]"
+        _render_span_node(
+            tree,
+            step=int(span_data.get("step", 0) or 0),
+            status=str(span_data.get("status", SpanStatus.PENDING.value)),
+            provider=str(span_data.get("provider", "unknown")),
+            model=str(span_data.get("model", "unknown")),
+            total_tokens=int(tokens.get("total", 0) or 0),
+            cost_usd=float(span_data.get("cost_usd", 0.0) or 0.0),
+            latency_ms=float(span_data.get("latency_ms", 0.0) or 0.0),
+            streaming=bool(span_data.get("streaming", False)),
+            error=span_data.get("error"),
+            error_type=span_data.get("error_type"),
+            input_data=span_data.get("input"),
+            output_data=span_data.get("output"),
+            full=full,
+            max_preview_chars=max_preview_chars,
         )
-
-        node = tree.add(label)
-
-        if status == "error" and span_data.get("error"):
-            error_type = span_data.get("error_type", "Error")
-            node.add(f"[red]{error_type}: {span_data['error']}[/red]")
 
     console.print(tree)

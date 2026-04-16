@@ -46,7 +46,7 @@ def run_agent(query):
 - **🔌 Zero-config auto-detection** — OpenAI, Anthropic, Groq, Ollama intercepted automatically
 - **🌳 Rich terminal tree** — every LLM call with tokens, cost, and latency at a glance
 - **💾 JSON export** — full traces saved to `.drishti/traces/` for sharing, diffing, and replaying
-- **🖥️ CLI tool** — `drishti list`, `drishti view`, `drishti clear`
+- **🖥️ CLI tool** — `drishti version`, `drishti list`, `drishti view`, `drishti diff`, `drishti stats`, `drishti export`, `drishti replay`, `drishti clear`
 - **💰 Cost tracking** — real-time pricing for 15+ models across 4 providers
 - **🛡️ Budget guard** — warn when cost exceeds a threshold
 - **⚡ Async support** — works with `async def` functions out of the box
@@ -132,7 +132,7 @@ pip install drishti-ai[all]         # All providers
 | **Groq** | `chat.completions.create` (sync + async) | llama-3.3-70b, llama-3.1-8b, mixtral-8x7b |
 | **Ollama** | `chat()` (sync + async) | All local models — always $0.00 |
 
-> **Provider not installed?** Drishti skips it silently. No crash, no warning.
+> **Provider not installed?** Drishti keeps running and prints a one-time actionable warning with the install extra.
 >
 > **Unknown model?** Cost defaults to $0.00. Trace still works perfectly.
 
@@ -141,12 +141,28 @@ pip install drishti-ai[all]         # All providers
 ## 🖥️ CLI
 
 ```bash
+# Print installed version
+drishti version
+
 # List all saved traces
 drishti list
 
 # Replay a trace in the terminal
 drishti view <file>          # by file path
 drishti view <id-prefix>     # by trace ID prefix
+drishti view <file> --full   # show full prompt/completion payloads
+
+# Compare two traces
+drishti diff <trace-a> <trace-b>
+
+# Aggregate stats
+drishti stats
+
+# Export a trace as CSV
+drishti export <trace> --format csv
+
+# Replay the same LLM requests and compare deltas
+drishti replay <trace>
 
 # Delete all saved traces
 drishti clear
@@ -190,7 +206,8 @@ async def async_agent(query: str) -> str:
 ```python
 @trace(
     name="my-agent",      # Custom trace name (default: function name)
-    budget_usd=0.05,      # Warn if cost exceeds this amount
+    budget_usd=0.05,      # Per-trace budget in USD
+    on_exceed="warn",     # "warn" (default) or "abort"
     display=True,          # Print tree to terminal (default: True)
     export=True,           # Save JSON to disk (default: True)
 )
@@ -206,8 +223,13 @@ Create `.drishti/config.toml` in your project root:
 [drishti]
 display = true              # Print trace tree to terminal
 export = true               # Save traces to disk
-traces_dir = ".drishti/traces"  # Where to save traces
-budget_usd = 0.10           # Warn if any trace exceeds this cost
+default_export_dir = ".drishti/traces"  # Preferred export dir (traces_dir still works)
+budget_usd = 0.10           # Budget threshold
+on_exceed = "warn"          # "warn" or "abort"
+quiet = false               # Suppress terminal tree output
+auto_open_on_error = false  # Auto-open trace output on errors
+max_preview_chars = 220     # Prompt/completion preview truncation length
+estimate_stream_tokens = true  # Use optional tiktoken estimation for streams
 ```
 
 ### Decorator usage patterns
@@ -226,6 +248,11 @@ def my_agent():
 # Budget guard
 @trace(budget_usd=0.05)
 def expensive_agent():
+    ...
+
+# Hard abort once budget is exceeded mid-run
+@trace(budget_usd=0.05, on_exceed="abort")
+def budget_guarded_agent():
     ...
 ```
 
@@ -309,7 +336,7 @@ ruff format --check drishti/ tests/
 | Version | Focus | Status |
 |---|---|---|
 | **v0.1.0** | Core Foundation | ✅ Released |
-| v0.2.0 | Developer Experience (trace diffing, streaming, budget abort) | 📋 Planned |
+| **v0.2.2** | Developer Experience + Replay + Concurrency + New Providers | ✅ Released |
 | v0.3.0 | Web Dashboard (`drishti serve`) | 📋 Planned |
 | v0.4.0 | Smart Features (prompt analysis, cost optimization) | 🔮 Future |
 | v0.5.0 | Framework Integrations (LangChain, LlamaIndex) | 🔮 Future |

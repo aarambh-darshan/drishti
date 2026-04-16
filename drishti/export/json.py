@@ -1,12 +1,4 @@
-"""
-JSON export — serializes Traces to JSON files.
-
-Traces are saved to .drishti/traces/ with filenames in the format:
-    YYYYMMDD_HHMMSS_<name>.json
-
-The JSON includes a summary block at the top for quick scanning,
-followed by the full spans array with all metrics.
-"""
+"""JSON export — serializes Traces to JSON files."""
 
 from __future__ import annotations
 
@@ -18,19 +10,20 @@ from ..models.span import Span
 from ..models.trace import Trace
 
 DEFAULT_TRACES_DIR = ".drishti/traces"
+SCHEMA_VERSION = "0.2.2"
 
 
-def _safe_str(obj: Any) -> str:
-    """Safely serialize any object to a JSON-compatible string."""
+def _safe_json_obj(obj: Any) -> Any:
+    """Best-effort conversion into JSON-serializable structure."""
     if obj is None:
-        return ""
+        return None
     try:
-        return json.dumps(obj, default=str)
+        return json.loads(json.dumps(obj, default=str, ensure_ascii=False))
     except Exception:
         return str(obj)
 
 
-def _span_to_dict(span: Span) -> dict:
+def _span_to_dict(span: Span) -> dict[str, Any]:
     """Convert a Span to a serializable dictionary."""
     return {
         "span_id": span.span_id,
@@ -50,31 +43,26 @@ def _span_to_dict(span: Span) -> dict:
         "status": span.status.value,
         "error": span.error,
         "error_type": span.error_type,
-        "input": _safe_str(span.input),
-        "output": _safe_str(span.output),
+        "streaming": span.streaming,
+        "estimated_tokens": span.estimated_tokens,
+        "estimation_source": span.estimation_source,
+        "request_payload": _safe_json_obj(span.request_payload),
+        "input": _safe_json_obj(span.input),
+        "output": _safe_json_obj(span.output),
     }
 
 
 def export_trace(trace: Trace, traces_dir: str = DEFAULT_TRACES_DIR) -> Path:
-    """
-    Serialize a Trace to JSON and save it to disk.
-
-    Args:
-        trace: The completed Trace to export.
-        traces_dir: Directory to save the trace file.
-
-    Returns:
-        Path to the saved JSON file.
-    """
+    """Serialize a Trace to JSON and save it to disk."""
     dir_path = Path(traces_dir)
     dir_path.mkdir(parents=True, exist_ok=True)
 
     timestamp = trace.started_at.strftime("%Y%m%d_%H%M%S")
-    # Sanitize trace name for filename safety
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in trace.name[:20])
     filename = dir_path / f"{timestamp}_{safe_name}.json"
 
     payload = {
+        "schema_version": SCHEMA_VERSION,
         "trace_id": trace.trace_id,
         "name": trace.name,
         "started_at": trace.started_at.isoformat(),

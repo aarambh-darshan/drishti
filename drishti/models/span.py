@@ -1,30 +1,24 @@
-"""
-Span model — represents a single LLM API call.
-
-A Span is the atomic unit of a trace. It captures everything about one
-LLM invocation: provider, model, input/output, token usage, cost,
-latency, and error state.
-"""
+"""Span model — represents a single LLM API call."""
 
 from __future__ import annotations
 
-import uuid
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class SpanStatus(str, Enum):
     """Status of a single LLM call."""
 
-    PENDING = "pending"  # call started, not yet complete
-    SUCCESS = "success"  # call returned successfully
-    ERROR = "error"  # call raised an exception
+    PENDING = "pending"
+    SUCCESS = "success"
+    ERROR = "error"
 
 
-@dataclass
+@dataclass(slots=True)
 class TokenUsage:
     """Token counts for a single LLM call."""
 
@@ -33,42 +27,44 @@ class TokenUsage:
     total_tokens: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class Span:
-    """
-    A single LLM API call within a trace.
-
-    Created by provider interceptors when an LLM SDK method is called.
-    The interceptor fills in inputs before the call, then completes the
-    span with outputs/metrics after the call returns (or fails).
-    """
+    """A single LLM API call within a trace."""
 
     # Identity
     span_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    step: int = 0  # 1-indexed position in trace, set by Collector
-    name: str = ""  # Human label, e.g. "openai/gpt-4o"
+    step: int = 0
+    name: str = ""
 
     # Provider info
-    provider: str = ""  # "openai" | "anthropic" | "groq" | "ollama"
-    model: str = ""  # e.g. "gpt-4o", "claude-3-5-sonnet-20241022"
+    provider: str = ""
+    model: str = ""
 
     # Timing
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    ended_at: Optional[datetime] = None
+    ended_at: datetime | None = None
 
-    # I/O (stored as raw Python objects for flexibility)
-    input: Any = None  # The messages/prompt sent to the LLM
-    output: Any = None  # The full response object
+    # I/O
+    input: Any = None
+    output: Any = None
+
+    # Replay payload (JSON-serializable normalized request shape)
+    request_payload: dict[str, Any] | None = None
 
     # Metrics
     tokens: TokenUsage = field(default_factory=TokenUsage)
     cost_usd: float = 0.0
     latency_ms: float = 0.0
 
+    # Streaming metadata
+    streaming: bool = False
+    estimated_tokens: bool = False
+    estimation_source: str | None = None
+
     # Status
     status: SpanStatus = SpanStatus.PENDING
-    error: Optional[str] = None  # Exception message if status=ERROR
-    error_type: Optional[str] = None  # Exception class name
+    error: str | None = None
+    error_type: str | None = None
 
     # Internal timing reference (not serialized)
     _perf_start: float = field(default_factory=time.perf_counter, repr=False)
