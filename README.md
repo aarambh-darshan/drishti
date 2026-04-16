@@ -3,8 +3,8 @@
   <p align="center"><strong>See what your agent thinks.</strong></p>
   <p align="center">
     <a href="https://github.com/aarambh-darshan/drishti/actions"><img src="https://github.com/aarambh-darshan/drishti/workflows/CI/badge.svg" alt="CI"></a>
-    <a href="https://pypi.org/project/drishti/"><img src="https://img.shields.io/pypi/v/drishti?color=blue" alt="PyPI"></a>
-    <a href="https://pypi.org/project/drishti/"><img src="https://img.shields.io/pypi/pyversions/drishti" alt="Python"></a>
+    <a href="https://pypi.org/project/drishti-ai/"><img src="https://img.shields.io/pypi/v/drishti-ai?color=blue" alt="PyPI"></a>
+    <a href="https://pypi.org/project/drishti-ai/"><img src="https://img.shields.io/pypi/pyversions/drishti-ai" alt="Python"></a>
     <a href="https://github.com/aarambh-darshan/drishti/blob/main/LICENSE"><img src="https://img.shields.io/github/license/aarambh-darshan/drishti" alt="License"></a>
   </p>
 </p>
@@ -60,11 +60,11 @@ def run_agent(query):
 ### Install
 
 ```bash
-pip install drishti[openai]        # OpenAI support
+pip install drishti-ai[openai]        # OpenAI support
 # or
-pip install drishti[anthropic]     # Anthropic support
+pip install drishti-ai[anthropic]     # Anthropic support
 # or
-pip install drishti[all]           # All providers
+pip install drishti-ai[all]           # All providers
 ```
 
 ### Trace Your Agent
@@ -111,12 +111,12 @@ That's it. Drishti automatically:
 ## 📦 Installation
 
 ```bash
-pip install drishti              # Core only (no provider SDKs)
-pip install drishti[openai]      # + OpenAI SDK
-pip install drishti[anthropic]   # + Anthropic SDK
-pip install drishti[groq]        # + Groq SDK
-pip install drishti[ollama]      # + Ollama SDK
-pip install drishti[all]         # All providers
+pip install drishti-ai              # Core only (no provider SDKs)
+pip install drishti-ai[openai]      # + OpenAI SDK
+pip install drishti-ai[anthropic]   # + Anthropic SDK
+pip install drishti-ai[groq]        # + Groq SDK
+pip install drishti-ai[ollama]      # + Ollama SDK
+pip install drishti-ai[all]         # All providers
 ```
 
 **Requirements:** Python 3.10+
