@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "drishti"
+name = "drishti-ai"
 version = "0.1.0"
 description = "See what your agent thinks — AI agent execution tracer"
 readme = "README.md"
